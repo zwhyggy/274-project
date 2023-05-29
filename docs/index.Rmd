@@ -2,20 +2,16 @@
 title: "How Did Covid Affect Seattle Housing Price"
 author: "Yuan Zhou"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
-output:
-  prettydoc::html_pretty:
-    theme: architect
-    highlight: github
-    toc: true
+output: rmdformats::readthedown
 font-family: Times New Roman
 
 ---
 
 # Introduction
 
-After going to school in Seattle for 4 years, I found Seattle to have an very unique personality. It has a balanced blend of metropolitan and nature; It's surrounded by the ocean and mountains; It has traditions while the people are also extremely forward thinking.
+After going to school in Seattle(University of Washington) for 4 years, I found Seattle to have an very unique personality. It has a balanced blend of metropolitan and nature; It's surrounded by the ocean and mountains; It has traditions while the people are also extremely forward thinking. It is a charming place and here are some of the pictures that I took while I was there.
 
-![]()
+![University of Washington](/Users/yuanz/Desktop/274/274 Final Project /6F63538C-6C1C-4E05-9D7E-CB4F10113FE2.jpeg)
 
 At the same time, Seattle is group zero for covid in the US, as it has seen the first U.S covid case. On the individual scale, everyone's life has changed since then. On the scale of the world, it has slowed down the global's economy for years. Housing prices have always been somewhat of an indicator of the state of the economy, since the desire of buying a house is relateable to the vast majority. Therefore, the aim of this project is to perform forecast as if covid did not happen and study how covid affected housing prices in Seattle.
 
@@ -28,7 +24,7 @@ library('MASS')
 
 ```
 
-```{r, echo = FALSE}
+```{r, echo = FALSE, message=FALSE, results='hide'}
 house_prices = read.table("houseprices.csv", header=FALSE, sep = ',')
 dim(house_prices)
 class(house_prices)
@@ -36,7 +32,7 @@ class(house_prices)
 
 # Initial Analysis
 
-```{r, echo=FALSE, fig.align = "center"}
+```{r, echo=FALSE}
 seattle_df = t(rbind(house_prices[1,6:331],house_prices[17,6:331]))
 sea_ts = ts(seattle_df[,2],start = c(1996,3), frequency = 12)
 sea_ts = as.numeric(sea_ts)
@@ -69,46 +65,67 @@ After differences at lag = 1 to remove seasonality. The TS plot shows a signific
 Therefore,the training set will leave out the last 50 data points From the training set, the last 12 data points will be used as a validation set
 
 ```{r}
-ts_validation = sea_ts[c(268:280)]
+ts_test = sea_ts[c(268:280)]
 ts_train = sea_ts[c(1:268)]
-ts.plot(ts_train)
 acf(ts_train, lag.max = 100)
 pacf(ts_train, lag.max = 100)
 
 bcTransform <- boxcox(ts_train ~ as.numeric(1: length(ts_train)))
 lambda=bcTransform$x[which(bcTransform$y == max(bcTransform$y))]
 
-# It's going to be a log transformation 
-ts_train.log <- log(ts_train)
+# Perform a log transformation
+# Since the Box Cox transformation interval contains 0. 
+ts_train_log <- log(ts_train)
 
-ts.plot(ts_train.log)
+# Plot ts after log transformation 
+ts.plot(ts_train)
+ts.plot(ts_train_log)
 
+# compare histograms after log transformation
+hist(ts_train, col="light blue", xlab="", main="Histogram before log transformation")
+hist(ts_train_log , col="light blue", xlab="", main="Histogram after log transformation")
 
-sea_ts_1 <- diff(ts_train.log, lag = 1)
+```
+Log transformation gave a more symmetric histogram. 
+```{r}
+# The ts plot shows trend
+# Difference at lag 1 to remove seasonality
+sea_ts_1 <- diff(ts_train_log, lag = 1)
 ts.plot(sea_ts_1)
-title(main = "d at 1")
-acf(sea_ts_1, lag.max = 100)
-pacf(sea_ts_1, lag.max = 100)
+title(main = "difference at lag 1")
 var(sea_ts_1)
 
-
+# The ts plot shows seasonality
+# Difference at lag 12 to remove seasonality
 sea_ts_1_12 <- diff(sea_ts_1, lag = 12)
 ts.plot(sea_ts_1_12)
-abline(h = 0)
-title(main = "d at 1, 12")
-acf(sea_ts_1_12, lag.max = 100)
-pacf(sea_ts_1_12, lag.max = 100)
+abline(h=mean(sea_ts_1_12), col="blue")
+fit<-lm(sea_ts_1_12 ~ as.numeric(1:length(sea_ts_1_12))); abline(fit,col = 'red')
+title(main = "difference at lag 1, 12")
 var(sea_ts_1_12)
 
 
+# There is still a trend, 
+# Difference at lag 1 again
 sea_ts_1_12_1 <- diff(sea_ts_1_12, lag = 1)
 ts.plot(sea_ts_1_12_1)
-abline(h = 0)
+abline(h=mean(sea_ts_1_12_1), col="blue")
+fit<-lm(sea_ts_1_12_1 ~ as.numeric(1:length(sea_ts_1_12_1))); abline(fit,col = 'red')
 title(main = "d at 1, 12, and 1")
-acf(sea_ts_1_12_1, lag.max = 50)
-pacf(sea_ts_1_12_1, lag.max = 50)
 var(sea_ts_1_12_1)
 
+```
+
+```{r}
+# Check the acf/ pacfs
+acf(sea_ts_1, lag.max = 100)
+pacf(sea_ts_1, lag.max = 100)
+
+acf(sea_ts_1_12, lag.max = 100)
+pacf(sea_ts_1_12, lag.max = 100)
+
+acf(sea_ts_1_12_1, lag.max = 50)
+pacf(sea_ts_1_12_1, lag.max = 50)
 ```
 
 MA Q = 1,q = 1
