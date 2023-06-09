@@ -6,30 +6,48 @@ output: rmdformats::readthedown
 font-family: Times New Roman
 ---
 
+# Executive summary
+The goal of this time series project is to address the question: "How did Covid affect the housing price in Seattle". The data set is obtained from Zillow, and it contains monthly housing price data. A variety of techniques was used: the data set was first splitted into training and testing set; then the series is differenced to remove trend and seasonality; two model was fitted given the sample ACF/PACF; A series of diagnostic checking tests are performed to the models. 
+
+The project then proceeds with the better model, and performs forecasts using the best model. Turns out a heavy tail distribution might be more desirable to fit this data set. However, given the best model in this project, Covid affected Seattle's housing price in a negative way. 
+
+All these steps are covered in detail in the main body of the report below:
+
 # Introduction
 
-After going to school in Seattle(University of Washington) for 4 years, I found Seattle to have an very unique personality. It has a balanced blend of metropolitan and nature; It's surrounded by the ocean and mountains; It has traditions while the people are also extremely forward thinking. It is a charming place and here are some of the pictures that I took while I was there.
+After going to school in Seattle(University of Washington) for 4 years, I found Seattle to have an very unique personality. It has a balanced blend of metropolitan and nature; It's surrounded by the ocean and mountains; It has traditions while also extremely forward thinking. It is a charming place and here are some of the pictures that I took while I was there.
 
 ![Thompson Hall in March](/Users/yuanz/Desktop/274/274%20Final%20Project%20/6F63538C-6C1C-4E05-9D7E-CB4F10113FE2.jpeg) ![Suzzallo Library in a Winter Afternoon](/Users/yuanz/Desktop/274/274%20Final%20Project%20/000057370004.jpeg) ![](/Users/yuanz/Desktop/274/274%20Final%20Project%20/000045200012.jpg) ![](/Users/yuanz/Desktop/274/274%20Final%20Project%20/000045190017.jpg) ![Evening at Montlake](/Users/yuanz/Desktop/274/274%20Final%20Project%20/000032120029.jpeg)
+![](/Users/yuanz/Desktop/274/274 Final Project /000032120019.jpg)
 
-At the same time, Seattle is group zero for covid in the US, as it has seen the first U.S covid case. On the individual scale, everyone's life has changed since then. On the scale of the world, it has slowed down the global's economy for years. Housing prices have always been somewhat of an indicator of the state of the economy, since the desire of buying a house is relateable to the vast majority. Therefore, the aim of this project is to perform forecast as if covid did not happen and study how C ovid affected housing prices in Seattle.
+At the same time, Seattle is groud zero for Covid in the US, as it has seen the first U.S covid case. On the individual scale, everyone's life has changed since then. On the scale of the world, it has slowed down the global economy. Housing prices have always been an indicator of the state of the economy, since the desire of buying a house is relatable to the vast majority. Therefore, the aim of this project is to perform forecast as if Covid did not happen and study how Covid affected housing prices in Seattle.
+
+The plan is to fit a model given this data set(obtained from Zillow), and perform forecast as if Covid did not happen, then compare the predicted values to the actual values to see how the pandemic changed the housing market in Seattle. 
+
+The data set includes average housing prices of cities in the US on a monthly basis. It's very complete data set and it records the prices from the 90's until present day. The data is interesting because most people will be looking to buy a house at some point in their lives, and by looking at the past data, it will give people a better idea of how much they can expect to pay for a house.
+
+The techniques include log transformation to the original data set;differencing the time series to remove trend and seasonality; Fit the data set using sarima models by examining the sample ACF/PACF; Diagnostic checking; Forecast on the transformed data and original data; Spectral analysis.
+
+Key results were the best model is a seasonal MA model; The residuals passed most of the diagnostic checking tests except the Shpiro-Wilk test; Residuals also passed spectral analysis tests. 
+
+A concise conclusion: even though the seasonal MA model passes most of the tests,a heavy tail distribution might work better; Using the model from this project, Covid affected Seattle's housing price in a negative way. 
+
+This project is implemented in R.
 
 ```{r pressure, echo=FALSE, message=FALSE}
-
 library('dplyr')
 library('MASS')
-library(knitr)
+library('knitr')
 library("MuMIn")
 library("dse")
 library('forecast')
-library(kableExtra)
+library('kableExtra')
 library('tidyverse')
 library('tidymodels')
 library('GeneCycle')
 library('TSA')
 library("MAPA")
 opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
-
 ```
 
 ```{r, echo = FALSE, message=FALSE, results='hide'}
@@ -40,7 +58,7 @@ class(house_prices)
 
 # Section 1: Initial Analysis
 
-Initial analysis is done in this first section. A plot/histogram of the raw Time series is plotted as well as the plot of the the Time series differences at lag 1. Then a series of ACF and PACF plots are produced for more context.
+Initial analysis is done in this first section. A plot/histogram of the raw time series is plotted as well as the plot of the the Time series differences at lag 1. 
 
 ```{r, echo=FALSE, results = 'hide', figures-side, fig.show="hold", out.width="50%"}
 seattle_df = t(rbind(house_prices[1,6:331],house_prices[17,6:331]))
@@ -62,20 +80,21 @@ title(main = 'Time Series Plot differenced at lag = 1' )
 hist(sea_ts_1, col="lightcyan", xlab="", main="histogram of data differenced at lag = 1")
 
 ```
+An initial look at the raw time series data shows there is an upward trend(in red).
 
-After differences at lag = 1 to remove seasonality. The TS plot shows a significant drop around k = 300. That would've been the result of the Covid 19 pandemic.
+After differences at lag = 1 to remove the trend. The ts plot shows a significant drop around k = 300. That would've been the result of the Covid 19 pandemic.
 
 Therefore,the data set will leave out the last 50 data points to build the model. From the rest of the data set, the last 12 data points will be used as a validation set
 
 ## Section 1.1: Transformation
 
 In this section, a box cox plot is generated to check if any transformation is necessary:
-
 ```{r, echo=FALSE, fig.show="hold", out.width="50%"}
 ts_test = sea_ts[c(268:280)] # Define Testing set 
 ts_train = sea_ts[c(1:268)] # Define Training set
 
-bcTransform <- boxcox(ts_train ~ as.numeric(1: length(ts_train))) # Box Cox transformation
+bcTransform <- boxcox(ts_train ~ as.numeric(1: length(ts_train)))
+title(main = 'Box Cox')# Box Cox transformation
 lambda=bcTransform$x[which(bcTransform$y == max(bcTransform$y))]
 
 # Perform a log transformation
@@ -93,10 +112,12 @@ hist(ts_train, col="lightcyan", xlab="", main="Histogram Before Log Transformati
 hist(ts_train_log , col="lightcyan", xlab="", main="Histogram After Log Transformation")
 ```
 
-Log transformation gave a more symmetric histogram.
+By performing the box cox check, 0 is contained in the CI. Therefore, a log transformation will be applied to the data set. The variance of ts decreases by comparing the plot before and after the log transformation.
+
+Also the histogram shows, a log transformation gave a more symmetric histogram.
 
 ## Section 1.2: Remove Trend/Seasonality
-
+In this section, the ts is differenced to remove trend and seasonality: 
 ```{r, echo=FALSE, fig.show="hold", out.width="50%", results = 'hide'}
 # The ts plot shows trend
 # Difference at lag 1 to remove seasonality
@@ -130,20 +151,27 @@ sea_ts_1_1_12_1 <- diff(sea_ts_1_1, lag = 1)
 var(sea_ts_1_1_12_1)
 
 ```
+The ts is first differenced at lag 1 because the original data shows an upward trend. Then by checking the ts plot after differenced at lag 1, it still shows a trend. Therefore, difference at lag 1 once more to remove the trend. 
 
+After differenced at lag 1 twice, the ts shows seasonality. Therefore, difference the ts at lag 12 to remove seasonality. 
+
+By checking the ts plot after differenced at lag 1 twice and lag 12 once. There is not a trend(red line), and seasonality. The variance is also more stable. 
+
+After the procedures mentioned above, the ts is stationary.
 ```{r, echo=FALSE, warning=FALSE}
-# Making Variances at different TS differences into a Table. 
+# Making Variances at different ts differences into a Table. 
 variances <- c(var(sea_ts_1),var(sea_ts_1_1),var(sea_ts_1_1_12), var(sea_ts_1_1_12_1))
-row_names <- c('TS Difference at Lag 1','TS Difference at Lag 1 Wwice', 'TS Difference at Lag 1 Twice, Then at Lag 12', 'TS Difference at lag 1 twice, Then at Lag 12, and at Lag 1')
+row_names <- c('ts Difference at Lag 1','ts Difference at Lag 1 Wwice', 'ts Difference at Lag 1 Twice, Then at Lag 12', 'ts Difference at lag 1 twice, Then at Lag 12, and at Lag 1')
 
 variance_table <- data_frame(row_names, variances)
-knitr::kable(variance_table,'pipe', align = c('l', 'c'), col.names = c('TS Differenced at Different Lags' , 'TS Variance '))
+knitr::kable(variance_table,'pipe', align = c('l', 'c'), col.names = c('ts Differenced at Different Lags' , 'ts Variance '))
 ```
 
-From the variance chart above. Differencing at lag 1 twice and lag 12 once produces the lowest variance. Further differencinhg actually increases the variance. Therefore, the project will proceed with differencing at lag 1 twice and lag 12 once.
+From the variance chart above. Differencing at lag 1 twice and lag 12 once produces the lowest variance. Further differencing actually increases the variance. Therefore, the project will proceed with differencing at lag 1 twice and lag 12 once.
 
 # Section 2: Model Identification/Selection
 
+In this section, the ACF/PACF plots are produced to help determine a model:
 ```{r,results='hide',echo=FALSE, fig.show="hold", out.width="50%"}
 # Check the acf/ pacfs
 acf(sea_ts_1, lag.max = 100, main = "ACF at lag 1")
@@ -171,6 +199,8 @@ knitr::kable(fit_1_table,'pipe', align = c('l', 'c'), col.names = c('Coef','S.E'
 ```
 
 Upon examining the CI for both coefficients. 0 is not contained in the CI, therefore, both coefficients are significant.
+
+To write the model in algebric form: $X_t = (1-B)^2(1-0.3559B)(1-B^{12})(1-0.88B^{12})Z_t$
 
 ## Section 2.2 Diagnostic checking of Model #1
 
@@ -216,8 +246,36 @@ fit_1_diag_table <- data_frame(fit_1_diag_test,fit_1_diag_results)
 
 ```{r, echo=FALSE}
 knitr::kable(fit_1_diag_table,'pipe', align = c('l', 'c'), col.names = c('Test', 'P-Value'),caption = "Diagnostic Tests for Fit 1")
-
 ```
+
+Upon examining the plots, the histogram of the residuals show an approximate normal distribution with a few of outliers. The residual plot shows no trend and stable variance except the first 20 observations. The QQ plot suggests it's a normal distribution. ACF and PACF are all within the CI. There is no unit roots because there is only the MA part, and the coefficients are strictly less than 1.
+
+Upon examining the chart, the residuals did not pass the Shapiro Wilk test. Therefore, reject the null hypothesis that the residual has a Gaussian distribution.
+
+Since the residuals displays an abnormal jump around time 20. The following section is to remove the first 20 obersvations of the residual and perform the diagnostic checking again
+
+```{r, echo=FALSE}
+res_1_2 <- res_1[20:268]
+plot.ts(res_1_2)
+title(main = " Residuals of Fit 1 Plot After Removing the First 20 Observations")
+
+# Tests 
+
+fit_1_2_SW <- shapiro.test(res_1)
+
+fit_1_2_BP <- Box.test(res_1_2, lag =12, type = c("Box-Pierce"), fitdf = 2)
+fit_1_2_LB <- Box.test(res_1_2, lag = 12, type = c("Ljung-Box"), fitdf = 2)
+fit_1_2_ML <- Box.test((res_1_2)^2, lag = 12, type = c("Ljung-Box"), fitdf = 0)
+
+fit_1_2_diag_results <- c(fit_1_2_SW$p.value, fit_1_2_BP$p.value,fit_1_2_LB$p.value,fit_1_2_ML$p.value)
+fit_1_diag_test <- c("Shapiro Wilk", "Box-Pierce","Ljung-Box","Mcleod-Li")
+fit_1_2_diag_table <- data_frame(fit_1_diag_test,fit_1_2_diag_results)
+
+
+knitr::kable(fit_1_2_diag_table,'pipe', align = c('l', 'c'), col.names = c('Test', 'P-Value'),caption = "Diagnostic Tests for Fit 1 After Removing the First 20 Observations")
+```
+
+After removing the first 20 observations, the residual still didn't pass Shapiro Wilk test. At the same time, it fails the Mcleod Li test. The project will proceed with the original residual.
 
 ## Section 2.3 Identify/ Fit possible Model #2
 
@@ -253,12 +311,17 @@ knitr::kable(fit_2_2_table,'pipe', align = c('l', 'c'), col.names = c('Coef','S.
 
 From the estimate of the coefficients, one could construct a CI for the coefficients. The CI for sar2 contains 0, therefore, the model will be adjusted to SARIMA(0,2,1)(0,1,1) s =12 with the coefficient for sar1 being fixed to be 0. This model reduces to the first fit.
 
-Therefore, this project will proceed with the first fit.
+Since the 2nd model reduces to the first model, it's not necessary to compare the AICc's
+
+Therefore, this project will proceed with the first fit, and in algebraic form: 
+$X_t = (1-B)^2(1-0.3559B)(1-B^{12})(1-0.88B^{12})Z_t$
 
 # Section 3: Forcast
 
 Forecast will be implemented in this section.
 
+## Section 3.1 : Forecast on Transformed Data
+This section is dedicated to implement forecasting on the log transformed data:
 ```{r, echo=FALSE}
 # Forecast on transformed data 
 pred_transform <- predict(fit_1, n.ahead = 12)
@@ -271,8 +334,11 @@ lines(lower_transform, col="blue", lty="dashed")
 points((length(ts_train_log)+1):(length(ts_train_log)+12),pred_transform$pred, col="red")
 title(main = "12 Forecasts on Transformed Data")
 ```
+The forecasts are within the CI.
 
-This next section is a forecast on the original data:
+## Section 3.2 : Forecast on Original Data
+
+This section is a forecast on the original data:
 
 ```{r, echo=FALSE}
 # Forecasts on Original data
@@ -286,7 +352,7 @@ points((length(ts_train)+1):(length(ts_train)+12), pred_original, col="purple")
 title(main = "12 Forecasts on Original Data")
 ```
 
-Now add the original TS data(in black)
+Now add the original ts data(in black)
 
 ```{r, echo = FALSE}
 ts.plot(sea_ts, xlim = c(260,length(ts_train)+12), ylim = c(250,max(U)), col='black')
@@ -296,11 +362,11 @@ points((length(ts_train)+1):(length(ts_train)+12), pred_original, col="purple")
 
 ```
 
-The Prediction is done for Jan, 1, 2019. Test CI is very narrow. The actual TS data is touching the lower bound of the CI. This could be a heavy tail distribution. Residuals test also suggets it's head-tail distribution
+The Prediction is done for Jan, 1, 2019. Test CI is very narrow. The actual ts data is touching the lower bound of the CI. This could be a heavy tail distribution. Residuals test from the previous sections also suggest it's head-tail distribution.
 
 # Section 4: Examine How Covid Changed Seattle's Housing Prices
 
-The more advanced goal of this project is to study how Covid changed Seattle's Housing Market. A 48 head prediction will put the TS right in the middle of the pandemic
+The more advanced goal of this project is to study how Covid changed Seattle's Housing Market. A 48 head prediction will put the ts right in the middle of the pandemic
 
 ```{r, echo=FALSE}
 pred_transform_covid <- predict(fit_1, n.ahead = 48)
@@ -323,33 +389,45 @@ lines(L_covid, col="green", lty="dashed")
 points((length(ts_train)+1):(length(ts_train)+48), pred_original_covid, col="purple")
 title(main = "48 Forecasts on Original Data")
 
-ts.plot(sea_ts)
 ```
+Upon examining the forecast plot. The actual housing prices(black) is much lower than the predictions(purple). Therefore, it's reasonable to suggest that Covid affected Seattle's housing market negatively.
 
 # Section 5: Spectral Analysis
-
+This section is dedicated to spectral analysis
 ```{r, echo=FALSE}
 # Recover frequencies 
-periodogram(ts_train_log)
-periodogram(res_1) # no domoninat frequcy 
+periodogram(ts_train_log, main= 'Periodogram of the Transformed Data') # period 12
+periodogram(res_1, main= 'Periodogram of the Residual') # no dominate frequency 
 
 # Fisher's test for periodicity detection
 # Apply to residuals
-fisher.g.test(res_1)
-# fail to Reject H0
+fisher_results <- fisher.g.test(res_1) # fail to Reject H0
+
+fisher_table <- data.frame('Fisher Test', fisher_results)
+
+knitr::kable(fisher_table,'pipe', align = c('l', 'c'), caption = "Fisher test ", col.names = c('','P-value'))
 
 # KS Test
-cpgram(res_1, main = "") # pass the test, Gaussian WN
+cpgram(res_1, main = "KS Test") # pass the test, Gaussian WN
 ```
+Upon examining the periodogram for the transformed data, the frequency is around 0.8, which corresponding to a period of 12, which is what's expected.
+
+From looking at the periodogram of the residuals, there is no dominant frequency, which is desired.
+
 The P value Fisher test is larger than 0.05. Fail to reject the null hypothesis that the residual is Gaussian WN.
 
-Pass KS test
+Kolmogorov-Smirnov Test for cumulative periodogram of residuals—passed. Since the black line is within the blue interval. 
 
 # Section 6: Conclusion
 
-Heavy Tailed Distribution would work better
+To recap, this study is aim to study how Covid affected Seattle's housing market. It performed initial analysis on the Seattle housing price time series, and implemented a log transformation on the time series.To remove the trend and seasonality, the log transformed time series is differenced at lag 1 twice and at lag 12 once.
+Then after fitted different models, it is obvious that the seasonal moving average model is the best model.($X_t = (1-B)^2(1-0.3559B)(1-B^{12})(1-0.88B^{12})Z_t$) The model also passes spectral analysis tests: KS test, Fisher test.However, upon performing diagnostic checking as well as forecasting, it showed that the residuals aren't normally distributed. Therefore, a heavy tail distribution might be more desirable. A heavy tail distribution will widen the CI and as shown in the forecast section, the CI of the current model is too narrow. This could be future study on this topic. 
 
-Covid hurt the housing market in SEA
+To address the purpose of the study, which is to study how covid affected Seattle's housing prices. The current model is still useful since it passed the majority of the tests, and upon performing a 2 year ahead forecast. It showed Covid had a negative effect on the housing market, since the predicted values is much higher than the actual values.
+
+Overall, the goal of this project is achieved: a various of ts techniques were studies and used on this real-life data set and the model made reasonable predictions.
+
+A Huge Thank you to Prof.Feldman For Teaching and Helping me with this project! and a Huge Thank you to my TA Thiha for helping me with this project!
 
 # Section 7: References
 
@@ -359,6 +437,357 @@ This data set is obtained from Zillow's Website: [Zillow Website](%22https://www
 
 The Lecture slides helped to build this project: [274 Lecture Slides]('https://gauchospace.ucsb.edu/courses/pluginfile.php/11850413/mod_resource/content/1/Lecture%2015-AirPass%20slides.pdf')
 
-A Huge Thank you to Prof.Feldman For Teaching and Helping me with this project!
 
 # Appendix
+
+## Section 1: Initial Analysis
+
+```{r, eval=FALSE}
+house_prices = read.table("houseprices.csv", header=FALSE, sep = ',')
+dim(house_prices)
+class(house_prices)
+```
+
+```{r,eval=FALSE}
+seattle_df = t(rbind(house_prices[1,6:331],house_prices[17,6:331]))
+sea_ts = ts(seattle_df[,2],start = c(1996,3), frequency = 12)
+sea_ts = as.numeric(sea_ts)
+ts.plot(sea_ts)
+nt = length(sea_ts)
+fit <- lm(sea_ts ~ as.numeric(1:nt));abline(fit, col = 'red')
+mean(sea_ts)[1]
+abline(h = mean(sea_ts))
+title(main = 'Raw Time Series Plot')
+hist(sea_ts, col="lightcyan", xlab="", main="histogram of raw data")
+
+
+sea_ts_1 <- diff(sea_ts, lag = 1)
+sea_ts_1 = ts(sea_ts_1)
+ts.plot(sea_ts_1)
+title(main = 'Time Series Plot differenced at lag = 1' )
+hist(sea_ts_1, col="lightcyan", xlab="",
+     main="histogram of data differenced at lag = 1")
+```
+
+### Section 1.1:
+
+```{r, fig.show="hold", out.width="50%",eval=FALSE}
+ts_test = sea_ts[c(268:280)] # Define Testing set 
+ts_train = sea_ts[c(1:268)] # Define Training set
+
+bcTransform <- boxcox(ts_train ~ as.numeric(1: length(ts_train))) 
+# Box Cox transformation
+lambda=bcTransform$x[which(bcTransform$y == max(bcTransform$y))]
+
+# Perform a log transformation
+# Since the Box Cox transformation interval contains 0. 
+ts_train_log <- log(ts_train)
+
+# Plot ts after log transformation 
+ts.plot(ts_train)
+title(main = 'Raw Time Series Plot')
+ts.plot(ts_train_log)
+title(main = 'Time Series Plot after transformation')
+
+# compare histograms after log transformation
+hist(ts_train, col="lightcyan", 
+     xlab="", main="Histogram Before Log Transformation")
+hist(ts_train_log , col="lightcyan", 
+     xlab="", main="Histogram After Log Transformation")
+```
+
+### Section 1.2: Remove Trend/Seasonality
+
+```{r,fig.show="hold", out.width="50%", results = 'hide',eval=FALSE}
+# The ts plot shows trend
+# Difference at lag 1 to remove seasonality
+sea_ts_1 <- diff(ts_train_log, lag = 1)
+ts.plot(sea_ts_1)
+title(main = "Difference at Lag 1")
+var(sea_ts_1)
+
+# There is still a trend, 
+# Difference at lag 1 again
+sea_ts_1_1 <- diff(sea_ts_1, lag = 1)
+ts.plot(sea_ts_1_1)
+abline(h=mean(sea_ts_1_1), col="blue")
+fit<-lm(sea_ts_1_1 ~ as.numeric(1:length(sea_ts_1_1))); abline(fit,col = 'red')
+title(main = "Difference at Lag 1, 1")
+var(sea_ts_1_1)
+
+
+# The ts plot shows seasonality
+# Difference at lag 12 to remove seasonality
+sea_ts_1_1_12 <- diff(sea_ts_1_1, lag = 12)
+ts.plot(sea_ts_1_1_12)
+abline(h=mean(sea_ts_1_1_12), col="blue")
+fit<-lm(sea_ts_1_1_12 ~ as.numeric(1:length(sea_ts_1_1_12))); abline(fit,col = 'red')
+title(main = "Difference at Lag 1, 1, and 12")
+var(sea_ts_1_1_12)
+
+hist(sea_ts_1_1_12 , col="lightcyan", xlab="", main="")
+
+sea_ts_1_1_12_1 <- diff(sea_ts_1_1, lag = 1)
+var(sea_ts_1_1_12_1)
+```
+
+```{r, warning=FALSE,eval=FALSE}
+# Making Variances at different ts differences into a Table. 
+variances <- c(var(sea_ts_1),var(sea_ts_1_1),var(sea_ts_1_1_12), 
+               var(sea_ts_1_1_12_1))
+row_names <- c('ts Difference at Lag 1',
+               'ts Difference at Lag 1 Wwice',
+               'ts Difference at Lag 1 Twice, Then at Lag 12', 
+               'ts Difference at lag 1 twice, Then at Lag 12, and at Lag 1')
+
+variance_table <- data_frame(row_names, variances)
+knitr::kable(variance_table,'pipe', align = c('l', 'c'),
+             col.names = c('ts Differenced at Different Lags',
+                           'ts Variance '))
+```
+
+## Section 2: Model Identification/Selection
+
+```{r,results='hide', fig.show="hold", out.width="50%",eval=FALSE}
+# Check the acf/ pacfs
+acf(sea_ts_1, lag.max = 100, main = "ACF at lag 1")
+pacf(sea_ts_1, lag.max = 100, main = "PACF at lag 1")
+
+acf(sea_ts_1_1, lag.max = 100,main = "ACF at lag 1 twice")
+pacf(sea_ts_1_1, lag.max = 100, main = "PACF at lag 1 twice")
+
+acf(sea_ts_1_1_12, lag.max = 50,
+    main = "ACF at lag 1 twice and lag 12 once")
+pacf(sea_ts_1_1_12, lag.max = 50, 
+     main = "PACF at lag 1 twice and lag 12 once")
+```
+
+### Section 2.1 Identify/ Fit possible Model #1
+
+```{r, warning=FALSE,eval=FALSE}
+library('forecast')
+fit_1 <- arima(ts_train_log, order = c(0,2,1),
+               seasonal = list(order = c(0,1,1), period =12), 
+               method = "ML")
+
+fit_1_coef <- c(fit_1$coef)
+fit_1_coef_se <- c(sqrt(fit_1$var.coef)[1],sqrt(fit_1$var.coef)[4] )
+fit_1_table <- data.frame(fit_1_coef, fit_1_coef_se)
+knitr::kable(fit_1_table,'pipe', align = c('l', 'c'), 
+             col.names = c('Coef','S.E'), caption = "Fit 1 Coefficients")
+```
+
+### Section 2.2 Diagnostic checking of Model #1
+
+```{r, echo=FALSE,fig.show="hold", out.width="50%",warning=FALSE,eval=FALSE}
+res_1 <- residuals(fit_1) # residuals for fit 1. 
+hist(res_1,density = 20, breaks=100, col="purple", xlab="", 
+     prob=TRUE,main = "Residuals Histogram of Fit 1")
+
+m1 <- mean(res_1)
+std1 <- sqrt(res_1)
+
+plot.ts(res_1)
+title(main = " Residuals of Fit 1 Plot")
+
+# Residual Trend/Mean plot
+fitt_1 <- lm(res_1 ~ as.numeric(1:length(res_1))); abline(fitt_1, col="pink")
+abline(h=mean(res_1), col="blue")
+
+# QQ plot for the residual of model 1 
+qqnorm(res_1,main= "Normal Q-Q Plot for Model 1")
+qqline(res_1,col="blue")
+
+# Check ACF/PACF for the residual of model 1 
+acf(res_1, lag.max=40, main = "ACF of the Residuals of Fit 1") 
+
+pacf(res_1, lag.max=40, main = "PACF of the Residuals of Fit 1")
+
+
+# Checking Invertibility of the MA part. 
+source("plot.roots.R")
+plot.roots(NULL,polyroot(c(1,-0.3559)), main="(A) Roots of MA part, Nonseasonal ")
+
+# Tests
+fit_1_SW <- shapiro.test(res_1)
+
+fit_1_BP <- Box.test(res_1, lag =12, type = c("Box-Pierce"), fitdf = 2)
+fit_1_LB <- Box.test(res_1, lag = 12, type = c("Ljung-Box"), fitdf = 2)
+fit_1_ML <- Box.test((res_1)^2, lag = 12, type = c("Ljung-Box"), fitdf = 0)
+
+fit_1_diag_results <- c(fit_1_SW$p.value, fit_1_BP$p.value,
+                        fit_1_LB$p.value,fit_1_ML$p.value)
+fit_1_diag_test <- c("Shapiro Wilk", "Box-Pierce","Ljung-Box","Mcleod-Li")
+fit_1_diag_table <- data_frame(fit_1_diag_test,fit_1_diag_results)
+```
+
+```{r, eval=FALSE}
+knitr::kable(fit_1_diag_table,'pipe', align = c('l', 'c'),
+             col.names = c('Test', 'P-Value'),
+             caption = "Diagnostic Tests for Fit 1")
+```
+
+```{r, eval=FALSE}
+res_1_2 <- res_1[20:268]
+plot.ts(res_1_2)
+title(main = " Residuals of Fit 1 Plot After Removing the First 20 Observations")
+
+# Tests 
+
+fit_1_2_SW <- shapiro.test(res_1)
+
+fit_1_2_BP <- Box.test(res_1_2, lag =12, type = c("Box-Pierce"), fitdf = 2)
+fit_1_2_LB <- Box.test(res_1_2, lag = 12, type = c("Ljung-Box"), fitdf = 2)
+fit_1_2_ML <- Box.test((res_1_2)^2, lag = 12, type = c("Ljung-Box"), fitdf = 0)
+
+fit_1_2_diag_results <- c(fit_1_2_SW$p.value, fit_1_2_BP$p.value,fit_1_2_LB$p.value,fit_1_2_ML$p.value)
+fit_1_diag_test <- c("Shapiro Wilk", "Box-Pierce","Ljung-Box","Mcleod-Li")
+fit_1_2_diag_table <- data_frame(fit_1_diag_test,fit_1_2_diag_results)
+
+
+knitr::kable(fit_1_2_diag_table,'pipe', align = c('l', 'c'), 
+             col.names = c('Test', 'P-Value'),
+             caption = "Diagnostic Tests for Fit 
+             1 After Removing the First 20 Observations")
+```
+
+### Section 2.3 Identify/ Fit possible Model #2
+
+```{r, eval=FALSE, warning=FALSE}
+fit_2 <- arima(ts_train_log, order = c(1,2,1), 
+               seasonal = list(order = c(2,1,1), period =12),
+               method = "ML")
+fit_2_coef <- c(fit_2$coef)
+fit_2_coef_se <- c(sqrt(fit_2$var.coef)[1],
+                   sqrt(fit_2$var.coef)[7], sqrt(fit_2$var.coef)[13], 
+                   sqrt(fit_2$var.coef)[19], sqrt(fit_2$var.coef)[20])
+fit_2_table <- data.frame(fit_2_coef, fit_2_coef_se)
+knitr::kable(fit_2_table,'pipe', align = c('l', 'c'), 
+             col.names = c('Coef','S.E'), caption = "Fit 2 Coefficients")
+```
+
+```{r, eval=FALSE, warning=FALSE}
+fit_2_1 <- arima(ts_train_log, order = c(0,2,1), 
+                 seasonal = list(order = c(2,1,1), period =12), method = "ML")
+fit_2_1_coef <- c(fit_2_1$coef)
+fit_2_1_coef_se <- c(sqrt(fit_2_1$var.coef)[1],
+                     sqrt(fit_2_1$var.coef)[6], sqrt(fit_2_1$var.coef)[11], sqrt(fit_2_1$var.coef)[16])
+fit_2_1_table <- data.frame(fit_2_1_coef, fit_2_1_coef_se)
+knitr::kable(fit_2_1_table,'pipe', align = c('l', 'c'),
+             col.names = c('Coef','S.E'))
+```
+
+```{r,eval=FALSE, warning=FALSE}
+fit_2_2 <- arima(ts_train_log, order = c(0,2,1), 
+                 seasonal = list(order = c(2,1,1), period =12), fixed = c(NA, 0, NA, NA),
+                 method = "ML")
+fit_2_2_coef <- c(fit_2_2$coef)
+fit_2_2_coef_se <- c(sqrt(fit_2_2$var.coef)[1],0,
+                     sqrt(fit_2_2$var.coef)[5], sqrt(fit_2_2$var.coef)[9])
+fit_2_2_table <- data.frame(fit_2_2_coef, fit_2_2_coef_se)
+knitr::kable(fit_2_2_table,'pipe', 
+             align = c('l', 'c'), col.names = c('Coef','S.E'))
+```
+
+## Section 3: Forcast
+
+### Section 3.1 : Forecast on Transformed Data
+
+```{r, eval=FALSE}
+# Forecast on transformed data 
+pred_transform <- predict(fit_1, n.ahead = 12)
+upper_transform = pred_transform$pred + 2*pred_transform$se
+lower_transform = pred_transform$pred - 2*pred_transform$se
+ts.plot(ts_train_log, xlim = c(1,length(ts_train_log)+12),
+        ylim = c(min(ts_train_log), max(upper_transform)))
+
+lines(upper_transform, col="blue", lty="dashed")
+lines(lower_transform, col="blue", lty="dashed")
+points((length(ts_train_log)+1):(length(ts_train_log)+12),
+       pred_transform$pred, col="red")
+title(main = "12 Forecasts on Transformed Data")
+```
+
+### Section 3.2 : Forecast on Original Data
+
+```{r, eval=FALSE}
+# Forecasts on Original data
+pred_original <- exp(pred_transform$pred)
+U = exp(upper_transform)
+L = exp(lower_transform)
+ts.plot(ts_train, xlim=c(240,length(ts_train)+12), ylim = c(250,max(U)))
+lines(U, col="green", lty="dashed")
+lines(L, col="green", lty="dashed")
+points((length(ts_train)+1):(length(ts_train)+12), pred_original, col="purple")
+title(main = "12 Forecasts on Original Data")
+```
+
+```{r, eval = FALSE}
+ts.plot(sea_ts, xlim = c(260,length(ts_train)+12), ylim = c(250,max(U)), col='black')
+lines(U, col="green", lty="dashed")
+lines(L, col="green", lty="dashed")
+points((length(ts_train)+1):(length(ts_train)+12), pred_original, col="purple")
+```
+
+## Section 4: Examine How Covid Changed Seattle's Housing Prices
+
+```{r, eval=FALSE}
+pred_transform_covid <- predict(fit_1, n.ahead = 48)
+upper_transform_covid = pred_transform_covid$pred + 2*pred_transform_covid$se
+lower_transform_covid = pred_transform_covid$pred - 2*pred_transform_covid$se
+ts.plot(ts_train_log, xlim = c(200,326), ylim = c(10,max(upper_transform_covid)))
+
+lines(upper_transform_covid, col="blue", lty="dashed")
+lines(lower_transform_covid, col="blue", lty="dashed")
+points((length(ts_train_log)+1):(length(ts_train_log)+48),
+       pred_transform_covid$pred, col="red")
+title(main = "48 Forecasts on Transformed Data")
+
+
+pred_original_covid <- exp(pred_transform_covid$pred)
+U_covid = exp(upper_transform_covid)
+L_covid = exp(lower_transform_covid)
+ts.plot(sea_ts)
+lines(U_covid, col="green", lty="dashed")
+lines(L_covid, col="green", lty="dashed")
+points((length(ts_train)+1):(length(ts_train)+48), 
+       pred_original_covid, col="purple")
+title(main = "48 Forecasts on Original Data")
+
+ts.plot(sea_ts)
+```
+
+## Section 5: Spectral Analysis
+
+```{r, eval=FALSE}
+# Recover frequencies 
+periodogram(ts_train_log, main= 'Periodogram of the Transformed Data') # period 12
+periodogram(res_1, main= 'Periodogram of the Residual') # no dominate frequency 
+
+# Fisher's test for periodicity detection
+# Apply to residuals
+fisher_results <- fisher.g.test(res_1) # fail to Reject H0
+
+fisher_table <- data.frame('Fisher Test', fisher_results)
+
+knitr::kable(fisher_table,'pipe', align = c('l', 'c'), caption = "Fisher test ", col.names = c('','P-value'))
+
+# KS Test
+cpgram(res_1, main = "KS Test") # pass the test, Gaussian WN
+```
+
+## Section 6: Fit coefficents
+
+### Coefs for fit 1
+```{r}
+fit_1
+```
+### Coefs for fit 2
+```{r}
+fit_2
+
+fit_2_1
+
+fit_2_2
+
+```
